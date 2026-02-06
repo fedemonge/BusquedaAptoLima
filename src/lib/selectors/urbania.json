@@ -1,0 +1,22 @@
+{
+  "searchResults": {
+    "listingCard": ".listing-item, .property-item, .search-result, [data-listing]",
+    "listingUrl": "a[href*='/inmueble/'], a[href*='/propiedad/'], a.listing-link",
+    "nextPage": ".pagination-next, a[rel='next'], .next-page"
+  },
+  "listingPage": {
+    "title": "h1.title, h1.property-title, .listing-title h1",
+    "price": ".price, .property-price, .listing-price, [class*='price']",
+    "currency": ".currency",
+    "squareMeters": ".area, .m2, [class*='area'], [class*='superficie']",
+    "bedrooms": ".bedrooms, .dormitorios, [class*='dormitorio'], [class*='bedroom']",
+    "bathrooms": ".bathrooms, .baños, [class*='baño'], [class*='bathroom']",
+    "parking": ".parking, .estacionamiento, [class*='parking'], [class*='estacionamiento']",
+    "neighborhood": ".location, .district, .neighborhood, .ubicacion",
+    "imageUrl": ".gallery img, .property-image img, .main-photo img"
+  },
+  "urlPatterns": {
+    "searchBase": "/buscar",
+    "listingBase": "/inmueble"
+  }
+}

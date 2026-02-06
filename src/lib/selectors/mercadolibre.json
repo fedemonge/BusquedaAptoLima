@@ -1,0 +1,22 @@
+{
+  "searchResults": {
+    "listingCard": ".ui-search-result, .results-item, .andes-card, li.ui-search-layout__item",
+    "listingUrl": "a.ui-search-link, a[href*='/MPE-'], a.ui-search-result__link",
+    "nextPage": ".andes-pagination__button--next, a[title='Siguiente'], .pagination-next"
+  },
+  "listingPage": {
+    "title": "h1.ui-pdp-title, h1.item-title, .ui-pdp-header__title-container h1",
+    "price": ".ui-pdp-price__second-line, .price-tag-fraction, .andes-money-amount__fraction",
+    "currency": ".andes-money-amount__currency-symbol, .price-tag-symbol",
+    "squareMeters": "[class*='superficie'], [class*='area'], .ui-pdp-specs [class*='m²']",
+    "bedrooms": "[class*='dormitorio'], [class*='recámara'], .ui-pdp-specs [class*='dormitorio']",
+    "bathrooms": "[class*='baño'], .ui-pdp-specs [class*='baño']",
+    "parking": "[class*='estacionamiento'], [class*='cochera'], .ui-pdp-specs [class*='estacionamiento']",
+    "neighborhood": ".ui-pdp-media__location, .ui-vip-location, .map-location",
+    "imageUrl": ".ui-pdp-gallery__figure img, .ui-pdp-image, .gallery-image img"
+  },
+  "urlPatterns": {
+    "searchBase": "/inmuebles",
+    "listingBase": "/MPE-"
+  }
+}

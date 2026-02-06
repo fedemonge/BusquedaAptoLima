@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  RENT
+  BUY
+}
+
+enum Currency {
+  PEN
+  USD
+}
+
+enum SourceName {
+  ADONDEVIVIR
+  URBANIA
+  PROPERATI
+  MERCADOLIBRE
+}
+
+enum AlertStatus {
+  ACTIVE
+  PAUSED
+  STOPPED
+}
+
+// User alerts - what searches to run
+model Alert {
+  id              String         @id @default(cuid())
+  email           String
+  transactionType TransactionType
+  city            String         @default("Lima")
+  neighborhood    String?
+  maxPrice        Int?
+  minSquareMeters Int?
+  maxSquareMeters Int?
+  minBedrooms     Int?
+  minParking      Int?
+  propertyType    String?
+  keywordsInclude String[]
+  keywordsExclude String[]
+  status          AlertStatus    @default(ACTIVE)
+  sendNoResults   Boolean        @default(true)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  lastRunAt       DateTime?
+
+  // Relations
+  alertListings   AlertListing[]
+
+  @@index([email])
+  @@index([status])
+}
+
+// All scraped listings
+model Listing {
+  id              String         @id @default(cuid())
+  sourceName      SourceName
+  canonicalUrl    String         @unique
+  title           String
+  price           Int
+  currency        Currency
+  transactionType TransactionType
+  city            String
+  neighborhood    String?
+  squareMeters    Int?
+  bedrooms        Int?
+  bathrooms       Int?
+  parking         Int?
+  imageUrl        String?
+  fingerprintHash String
+
+  scrapedAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  alertListings   AlertListing[]
+
+  @@index([fingerprintHash])
+  @@index([sourceName])
+  @@index([transactionType, city])
+}
+
+// Join table tracking which listings were shown to which alerts
+model AlertListing {
+  id          String   @id @default(cuid())
+  alertId     String
+  listingId   String
+  emailedAt   DateTime @default(now())
+
+  // Relations
+  alert       Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, listingId])
+  @@index([alertId])
+  @@index([listingId])
+}
+
+// Track scraping runs for monitoring
+model ScrapeRun {
+  id            String     @id @default(cuid())
+  source        SourceName
+  startedAt     DateTime   @default(now())
+  completedAt   DateTime?
+  success       Boolean    @default(false)
+  listingsFound Int        @default(0)
+  newListings   Int        @default(0)
+  errorMessage  String?
+
+  @@index([source, startedAt])
+}
+
+// Rate limiting for magic links
+model MagicLinkRequest {
+  id        String   @id @default(cuid())
+  email     String
+  createdAt DateTime @default(now())
+  usedAt    DateTime?
+
+  @@index([email, createdAt])
+}
