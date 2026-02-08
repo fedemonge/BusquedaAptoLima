@@ -1,14 +1,22 @@
 import jwt from 'jsonwebtoken';
 
-const UNSUBSCRIBE_SECRET = process.env.UNSUBSCRIBE_SECRET || 'dev-unsubscribe-secret';
-const MAGIC_LINK_SECRET = process.env.MAGIC_LINK_SECRET || 'dev-magic-link-secret';
+function getSecret(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} environment variable is required but not set`);
+  }
+  return value;
+}
+
+const UNSUBSCRIBE_SECRET = getSecret('UNSUBSCRIBE_SECRET');
+const MAGIC_LINK_SECRET = getSecret('MAGIC_LINK_SECRET');
 
 /**
  * Generate a signed unsubscribe token for an alert.
  */
 export function generateUnsubscribeToken(alertId: string): string {
   return jwt.sign({ alertId, type: 'unsubscribe' }, UNSUBSCRIBE_SECRET, {
-    expiresIn: '365d', // Long-lived for email links
+    expiresIn: '90d',
   });
 }
 

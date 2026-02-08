@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (alertCount === 0) {
       // Still send a success response to prevent email enumeration
       // but don't actually send an email
-      console.log(`[MAGIC_LINK] No alerts for: ${email}`);
+      console.log(`[MAGIC_LINK] No alerts found for requested email`);
       return NextResponse.json({ success: true });
     }
 
@@ -62,11 +62,11 @@ export async function POST(request: NextRequest) {
     const sent = await sendMagicLinkEmail(email, magicLinkUrl);
 
     if (!sent) {
-      console.error(`[MAGIC_LINK] Failed to send to: ${email}`);
+      console.error(`[MAGIC_LINK] Failed to send email`);
       // Still return success to prevent enumeration
     }
 
-    console.log(`[MAGIC_LINK] Sent to: ${email}`);
+    console.log(`[MAGIC_LINK] Sent successfully`);
 
     return NextResponse.json({ success: true });
   } catch (error) {

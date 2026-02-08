@@ -3,11 +3,11 @@ import { prisma } from '@/lib/db';
 import { verifyMagicLinkToken } from '@/lib/utils/tokens';
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { token: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const { token } = params;
+    const { token } = await params;
 
     // Verify the magic link token
     const decoded = verifyMagicLinkToken(token);

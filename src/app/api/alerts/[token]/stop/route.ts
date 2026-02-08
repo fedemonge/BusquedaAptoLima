@@ -4,10 +4,10 @@ import { verifyMagicLinkToken } from '@/lib/utils/tokens';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const alertId = params.token;
+    const { token: alertId } = await params;
     const body = await request.json();
     const { token } = body;
 

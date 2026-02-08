@@ -147,11 +147,11 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       html,
     });
 
-    console.log(`[EMAIL] SENT: ${to} - ${subject} - ${result.messageId}`);
+    console.log(`[EMAIL] SENT: ${subject} - ${result.messageId}`);
     return true;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.log(`[EMAIL] FAILED: ${to} - ${subject} - ${errorMsg}`);
+    console.error(`[EMAIL] FAILED: ${subject} - ${errorMsg}`);
     return false;
   }
 }

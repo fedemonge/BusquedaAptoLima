@@ -13,8 +13,8 @@ function verifyCronSecret(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.warn('[CRON] CRON_SECRET not set, allowing request');
-    return true;
+    console.error('[CRON] CRON_SECRET not set, rejecting request');
+    return false;
   }
 
   return authHeader === `Bearer ${cronSecret}`;
@@ -96,7 +96,7 @@ async function processAlert(alert: {
   keywordsExclude: string[];
   sendNoResults: boolean;
 }): Promise<void> {
-  console.log(`[CRON] Processing alert ${alert.id} for ${alert.email}`);
+  console.log(`[CRON] Processing alert ${alert.id}`);
 
   // Build alert params
   const params: AlertParams = {

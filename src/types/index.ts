@@ -44,16 +44,16 @@ export interface AlertParams {
 export const CreateAlertSchema = z.object({
   email: z.string().email('Invalid email address'),
   transactionType: z.enum(['RENT', 'BUY']),
-  city: z.string().default('Lima'),
-  neighborhood: z.string().optional(),
+  city: z.enum(['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Piura', 'Cusco', 'Iquitos', 'Huancayo', 'Tacna', 'Pucallpa']).default('Lima'),
+  neighborhood: z.string().max(100).optional(),
   maxPrice: z.number().positive().optional(),
   minSquareMeters: z.number().positive().optional(),
   maxSquareMeters: z.number().positive().optional(),
   minBedrooms: z.number().int().min(0).optional(),
   minParking: z.number().int().min(0).optional(),
-  propertyType: z.string().optional(),
-  keywordsInclude: z.array(z.string()).optional(),
-  keywordsExclude: z.array(z.string()).optional(),
+  propertyType: z.string().max(50).optional(),
+  keywordsInclude: z.array(z.string().max(100)).max(20).optional(),
+  keywordsExclude: z.array(z.string().max(100)).max(20).optional(),
   sendNoResults: z.boolean().default(true),
 });
 

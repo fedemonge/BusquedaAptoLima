@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[ALERT] Created: ${alert.id} for ${alert.email}`);
+    console.log(`[ALERT] Created: ${alert.id}`);
 
     return NextResponse.json(
       { success: true, alertId: alert.id },

@@ -160,7 +160,7 @@ export function generateDigestEmail(params: DigestEmailParams): string {
   <div class="container">
     <div class="header">
       <h1>🏠 Daily Apartment Listings</h1>
-      <div class="date">${city} - ${date}</div>
+      <div class="date">${escapeHtml(city)} - ${escapeHtml(date)}</div>
     </div>
 
     <div class="summary">
@@ -207,13 +207,13 @@ function generateListingCard(listing: NormalizedListing): string {
     details.push(`🚗 ${listing.parking} estac.`);
   }
   if (listing.neighborhood) {
-    details.push(`📍 ${listing.neighborhood}`);
+    details.push(`📍 ${escapeHtml(listing.neighborhood)}`);
   }
 
   return `
     <div class="listing-card">
       <div class="listing-title">
-        <a href="${listing.canonicalUrl}" target="_blank">${escapeHtml(listing.title)}</a>
+        <a href="${escapeUrl(listing.canonicalUrl)}" target="_blank">${escapeHtml(listing.title)}</a>
       </div>
       <div class="listing-price">${formatPrice(listing.price, listing.currency)}</div>
       <div class="listing-details">
@@ -279,9 +279,9 @@ export function generateNoResultsEmail(params: {
   <div class="container">
     <h1>🏠 No New Listings Today</h1>
     <p class="message">
-      We searched ${sourcesText} but didn't find any new apartments in ${city} matching your criteria.
+      We searched ${sourcesText} but didn't find any new apartments in ${escapeHtml(city)} matching your criteria.
     </p>
-    <p style="font-size: 14px; color: #6b7280;">${date}</p>
+    <p style="font-size: 14px; color: #6b7280;">${escapeHtml(date)}</p>
     <a href="${unsubscribeUrl}" class="stop-btn">Stop Daily Search</a>
     <div class="footer">
       <p>Your search will continue tomorrow.</p>
@@ -303,4 +303,20 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * Validate and escape a URL for use in href attributes.
+ * Returns '#' for invalid/dangerous URLs.
+ */
+function escapeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return '#';
+    }
+    return escapeHtml(url);
+  } catch {
+    return '#';
+  }
 }
