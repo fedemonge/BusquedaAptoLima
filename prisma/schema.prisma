@@ -42,7 +42,7 @@ model Alert {
   maxSquareMeters Int?
   minBedrooms     Int?
   minParking      Int?
-  propertyType    String?
+  propertyTypes   String[]
   keywordsInclude String[]
   keywordsExclude String[]
   status          AlertStatus    @default(ACTIVE)

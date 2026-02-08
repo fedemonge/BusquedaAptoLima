@@ -91,7 +91,7 @@ async function processAlert(alert: {
   maxSquareMeters: number | null;
   minBedrooms: number | null;
   minParking: number | null;
-  propertyType: string | null;
+  propertyTypes: string[];
   keywordsInclude: string[];
   keywordsExclude: string[];
   sendNoResults: boolean;
@@ -108,7 +108,7 @@ async function processAlert(alert: {
     maxSquareMeters: alert.maxSquareMeters || undefined,
     minBedrooms: alert.minBedrooms || undefined,
     minParking: alert.minParking || undefined,
-    propertyType: alert.propertyType || undefined,
+    propertyTypes: alert.propertyTypes.length > 0 ? alert.propertyTypes : undefined,
     keywordsInclude: alert.keywordsInclude,
     keywordsExclude: alert.keywordsExclude,
   };

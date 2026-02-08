@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         maxSquareMeters: data.maxSquareMeters,
         minBedrooms: data.minBedrooms,
         minParking: data.minParking,
-        propertyType: data.propertyType,
+        propertyTypes: data.propertyTypes || [],
         keywordsInclude: data.keywordsInclude || [],
         keywordsExclude: data.keywordsExclude || [],
         sendNoResults: data.sendNoResults,

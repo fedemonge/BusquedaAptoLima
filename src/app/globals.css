@@ -3,13 +3,24 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
+  --teal: #28cfe2;
+  --teal-dark: #1fb8c9;
+  --charcoal: #1a1d1e;
+  --dark: #2d3436;
+  --text-light: #636e72;
+  --grey: #b3babd;
+  --light: #f0f3f4;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--dark);
+  background: #ffffff;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400;
 }
 
 @layer utilities {

@@ -35,7 +35,7 @@ export interface AlertParams {
   maxSquareMeters?: number;
   minBedrooms?: number;
   minParking?: number;
-  propertyType?: string;
+  propertyTypes?: string[];
   keywordsInclude?: string[];
   keywordsExclude?: string[];
 }
@@ -51,7 +51,7 @@ export const CreateAlertSchema = z.object({
   maxSquareMeters: z.number().positive().optional(),
   minBedrooms: z.number().int().min(0).optional(),
   minParking: z.number().int().min(0).optional(),
-  propertyType: z.string().max(50).optional(),
+  propertyTypes: z.array(z.string().max(50)).max(6).optional(),
   keywordsInclude: z.array(z.string().max(100)).max(20).optional(),
   keywordsExclude: z.array(z.string().max(100)).max(20).optional(),
   sendNoResults: z.boolean().default(true),

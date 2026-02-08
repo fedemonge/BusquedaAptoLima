@@ -1,11 +1,8 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
-
 export const metadata: Metadata = {
-  title: 'Apartment Finder Alerts - Peru',
+  title: 'Apartment Finder Alerts - Federico Monge Consulting',
   description: 'Daily real estate alerts for apartments in Lima and Peru',
 };
 
@@ -16,7 +13,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={inter.className}>{children}</body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
