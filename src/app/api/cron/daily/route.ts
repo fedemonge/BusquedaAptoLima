@@ -26,7 +26,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  console.log('[CRON] Starting daily job');
+  // Support running a specific alert on-demand via query param or body
+  const alertId = request.nextUrl.searchParams.get('alertId');
+  const sendEmail = request.nextUrl.searchParams.get('sendEmail') !== 'false'; // default true
+
+  console.log(`[CRON] Starting ${alertId ? `on-demand job for alert ${alertId}` : 'daily job'}`);
   const startTime = Date.now();
 
   try {
@@ -38,10 +42,17 @@ export async function POST(request: NextRequest) {
       // Continue without sheets logging
     }
 
-    // Get all active alerts
-    const alerts = await prisma.alert.findMany({
-      where: { status: 'ACTIVE' },
-    });
+    // Get alerts - either specific one or all active
+    const alerts = alertId
+      ? await prisma.alert.findMany({ where: { id: alertId, status: 'ACTIVE' } })
+      : await prisma.alert.findMany({ where: { status: 'ACTIVE' } });
+
+    if (alertId && alerts.length === 0) {
+      return NextResponse.json(
+        { error: `Alert ${alertId} not found or not active` },
+        { status: 404 }
+      );
+    }
 
     console.log(`[CRON] Processing ${alerts.length} active alerts`);
 
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Process each alert
     for (const alert of alerts) {
       try {
-        await processAlert(alert);
+        await processAlert(alert, sendEmail);
         results.alertsProcessed++;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -95,7 +106,7 @@ async function processAlert(alert: {
   keywordsInclude: string[];
   keywordsExclude: string[];
   sendNoResults: boolean;
-}): Promise<void> {
+}, shouldSendEmail = true): Promise<void> {
   console.log(`[CRON] Processing alert ${alert.id}`);
 
   // Build alert params
@@ -158,28 +169,36 @@ async function processAlert(alert: {
     day: 'numeric',
   });
 
-  // Send email
-  if (newListings.length > 0) {
-    await sendDigestEmail({
-      to: alert.email,
-      date,
-      city: alert.city,
-      newListings,
-      totalScraped: allListings.length,
-      sourcesSearched: successfulSources.length > 0 ? successfulSources : ENABLED_SOURCES,
-      unsubscribeUrl,
-    });
+  // Send email (unless disabled for on-demand runs)
+  if (shouldSendEmail) {
+    if (newListings.length > 0) {
+      await sendDigestEmail({
+        to: alert.email,
+        date,
+        city: alert.city,
+        newListings,
+        totalScraped: allListings.length,
+        sourcesSearched: successfulSources.length > 0 ? successfulSources : ENABLED_SOURCES,
+        unsubscribeUrl,
+      });
 
-    // Record emailed listings
-    await recordEmailedListings(alert.id, newListings);
-  } else if (alert.sendNoResults) {
-    await sendNoResultsEmail({
-      to: alert.email,
-      date,
-      city: alert.city,
-      sourcesSearched: successfulSources.length > 0 ? successfulSources : ENABLED_SOURCES,
-      unsubscribeUrl,
-    });
+      // Record emailed listings
+      await recordEmailedListings(alert.id, newListings);
+    } else if (alert.sendNoResults) {
+      await sendNoResultsEmail({
+        to: alert.email,
+        date,
+        city: alert.city,
+        sourcesSearched: successfulSources.length > 0 ? successfulSources : ENABLED_SOURCES,
+        unsubscribeUrl,
+      });
+    }
+  } else {
+    console.log(`[CRON] Alert ${alert.id}: Email sending disabled for this run (${newListings.length} new listings found)`);
+    // Still record emailed listings to avoid sending them later
+    if (newListings.length > 0) {
+      await recordEmailedListings(alert.id, newListings);
+    }
   }
 
   // Update last run time

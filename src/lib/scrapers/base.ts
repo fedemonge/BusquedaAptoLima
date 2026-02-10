@@ -34,7 +34,8 @@ export abstract class BaseScraper {
 
   protected async fetchWithRetry(
     url: string,
-    retries = SCRAPER_CONFIG.MAX_RETRIES
+    retries = SCRAPER_CONFIG.MAX_RETRIES,
+    extraHeaders?: Record<string, string>
   ): Promise<string | null> {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
@@ -52,6 +53,7 @@ export abstract class BaseScraper {
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            ...extraHeaders,
           },
           signal: controller.signal,
         });
@@ -62,7 +64,15 @@ export abstract class BaseScraper {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        return await response.text();
+        const html = await response.text();
+
+        // Detect bot protection pages
+        if (this.isBotChallenge(html)) {
+          console.log(`[${this.sourceName}] BOT_CHALLENGE_DETECTED: ${url}`);
+          return null;
+        }
+
+        return html;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.log(`[${this.sourceName}] FETCH_ATTEMPT_${attempt + 1}_FAILED: ${url} - ${errorMsg}`);
@@ -77,14 +87,49 @@ export abstract class BaseScraper {
     return null;
   }
 
+  // Detect Cloudflare or other bot challenges
+  protected isBotChallenge(html: string): boolean {
+    const snippet = html.substring(0, 5000).toLowerCase();
+    return (
+      snippet.includes('just a moment') ||
+      snippet.includes('challenge-platform') ||
+      snippet.includes('cf-chl-') ||
+      (snippet.includes('_bmstate') && html.length < 5000)
+    );
+  }
+
   // Build search URL from alert parameters
   abstract buildSearchUrl(params: AlertParams, page?: number): string;
+
+  /**
+   * Main scraping method. Extracts all listings for given params.
+   * Default: fetch search page URLs, then fetch each listing detail page.
+   * Scrapers that can extract data from search page cards should override this.
+   */
+  async scrapeAll(params: AlertParams): Promise<NormalizedListing[]> {
+    const urls = await this.fetchSearchResults(params);
+    const listings: NormalizedListing[] = [];
+
+    for (const url of urls) {
+      try {
+        const listing = await this.fetchListingDetails(url);
+        if (listing) {
+          listings.push(listing);
+        }
+        await randomDelay();
+      } catch (error) {
+        console.log(`[${this.sourceName}] LISTING_ERROR: ${url} - ${error}`);
+      }
+    }
+
+    return listings;
+  }
 
   // Parse search results page to extract listing URLs
   async fetchSearchResults(params: AlertParams): Promise<string[]> {
     const urls: string[] = [];
     let page = 1;
-    const maxPages = 5; // Limit pages to avoid excessive scraping
+    const maxPages = 5;
 
     while (page <= maxPages && urls.length < SCRAPER_CONFIG.MAX_LISTINGS_PER_SOURCE) {
       const searchUrl = this.buildSearchUrl(params, page);
@@ -107,7 +152,6 @@ export abstract class BaseScraper {
       urls.push(...pageUrls);
       console.log(`[${this.sourceName}] FOUND_LISTINGS: ${pageUrls.length} on page ${page}`);
 
-      // Check for next page
       if (!this.hasNextPage($)) {
         break;
       }

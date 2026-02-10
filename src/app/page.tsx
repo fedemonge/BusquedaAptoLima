@@ -17,6 +17,12 @@ export default function Home() {
               Main Site
             </a>
             <Link
+              href="/run-now"
+              className="text-[#d4d9db] text-sm font-medium hover:text-white transition-colors no-underline hidden sm:inline"
+            >
+              Run Now
+            </Link>
+            <Link
               href="/apartment-alerts"
               className="bg-gradient-to-r from-[#28cfe2] to-[#1fb8c9] text-[#1a1d1e] px-5 py-2.5 rounded-full font-semibold text-sm hover:-translate-y-0.5 hover:shadow-[0_10px_40px_rgba(40,207,226,0.25)] transition-all no-underline"
             >
@@ -52,6 +58,12 @@ export default function Home() {
               className="inline-flex items-center gap-2 bg-transparent text-white border-2 border-[#8a9295] px-8 py-4 rounded-full font-semibold text-base hover:border-[#28cfe2] hover:text-[#28cfe2] hover:bg-[rgba(40,207,226,0.05)] transition-all no-underline"
             >
               Manage Alerts
+            </Link>
+            <Link
+              href="/run-now"
+              className="inline-flex items-center gap-2 bg-transparent text-white border-2 border-[#8a9295] px-8 py-4 rounded-full font-semibold text-base hover:border-[#28cfe2] hover:text-[#28cfe2] hover:bg-[rgba(40,207,226,0.05)] transition-all no-underline"
+            >
+              Run Now
             </Link>
           </div>
         </div>

@@ -3,6 +3,8 @@ import { BaseScraper, type SelectorConfig } from './base';
 import type { AlertParams, NormalizedListing } from '@/types';
 import { parsePrice } from '@/lib/utils/price';
 import { normalizeAddress } from '@/lib/utils/fingerprint';
+import { randomDelay } from '@/lib/utils/delay';
+import { SCRAPER_CONFIG } from '@/lib/config/constants';
 import selectors from '@/lib/selectors/properati.json';
 
 export class ProperatiScraper extends BaseScraper {
@@ -11,17 +13,12 @@ export class ProperatiScraper extends BaseScraper {
   readonly selectors: SelectorConfig = selectors;
 
   buildSearchUrl(params: AlertParams, page = 1): string {
-    // Properati URL structure: /s/lima/departamento/alquiler
     const pathParts: string[] = ['s'];
 
-    // City
     const city = params.city?.toLowerCase() || 'lima';
     pathParts.push(city);
-
-    // Property type
     pathParts.push('departamento');
 
-    // Transaction type
     if (params.transactionType === 'RENT') {
       pathParts.push('alquiler');
     } else {
@@ -30,9 +27,13 @@ export class ProperatiScraper extends BaseScraper {
 
     let url = `${this.baseUrl}/${pathParts.join('/')}`;
 
-    // Query parameters
-    const queryParams: string[] = [];
+    // Properati uses path segments for pagination: /s/lima/departamento/alquiler/2
+    if (page > 1) {
+      url += `/${page}`;
+    }
 
+    // Query parameters for filters
+    const queryParams: string[] = [];
     if (params.maxPrice) {
       queryParams.push(`price_to=${params.maxPrice}`);
     }
@@ -48,9 +49,6 @@ export class ProperatiScraper extends BaseScraper {
     if (params.neighborhood) {
       queryParams.push(`l2=${encodeURIComponent(params.neighborhood)}`);
     }
-    if (page > 1) {
-      queryParams.push(`page=${page}`);
-    }
 
     if (queryParams.length > 0) {
       url += `?${queryParams.join('&')}`;
@@ -59,62 +57,157 @@ export class ProperatiScraper extends BaseScraper {
     return url;
   }
 
+  /**
+   * Override scrapeAll to extract listings directly from search page cards.
+   * Properati cards use article.snippet with data-url, data-test attributes.
+   */
+  async scrapeAll(params: AlertParams): Promise<NormalizedListing[]> {
+    const listings: NormalizedListing[] = [];
+    let page = 1;
+    const maxPages = 5;
+
+    while (page <= maxPages && listings.length < SCRAPER_CONFIG.MAX_LISTINGS_PER_SOURCE) {
+      const searchUrl = this.buildSearchUrl(params, page);
+      console.log(`[${this.sourceName}] FETCHING_SEARCH: page ${page} - ${searchUrl}`);
+
+      const html = await this.fetchWithRetry(searchUrl);
+      if (!html) {
+        console.log(`[${this.sourceName}] SEARCH_FAILED: Could not fetch page ${page}`);
+        break;
+      }
+
+      const $ = cheerio.load(html);
+      const pageListings = this.parseListingsFromSearch($, params);
+
+      if (pageListings.length === 0) {
+        console.log(`[${this.sourceName}] NO_MORE_RESULTS: page ${page}`);
+        break;
+      }
+
+      listings.push(...pageListings);
+      console.log(`[${this.sourceName}] FOUND_LISTINGS: ${pageListings.length} on page ${page}`);
+
+      // Check for next page - Properati uses #pagination-next with data-islast
+      const nextBtn = $('#pagination-next');
+      if (nextBtn.length === 0 || nextBtn.attr('data-islast') === 'true') {
+        break;
+      }
+
+      page++;
+      await randomDelay();
+    }
+
+    return listings.slice(0, SCRAPER_CONFIG.MAX_LISTINGS_PER_SOURCE);
+  }
+
+  /**
+   * Parse listings from search results page.
+   * Each card is <article class="snippet" data-url="..." data-idanuncio="...">
+   */
+  private parseListingsFromSearch(
+    $: cheerio.CheerioAPI,
+    params: AlertParams
+  ): NormalizedListing[] {
+    const listings: NormalizedListing[] = [];
+
+    $('article.snippet').each((_, element) => {
+      try {
+        const $card = $(element);
+
+        // Get canonical URL from data-url attribute
+        const canonicalUrl = $card.attr('data-url');
+        if (!canonicalUrl) return;
+
+        // Extract title from the link
+        const title = $card.find('a.title, [data-test="snippet__title"]').text().trim();
+        if (!title) return;
+
+        // Extract price
+        const priceText = $card.find('[data-test="snippet__price"], div.price').text().trim();
+        const priceData = parsePrice(priceText);
+        if (!priceData) return;
+
+        // Extract features
+        const bedroomsText = $card.find('[data-test="bedrooms-value"], span.properties__bedrooms').text().trim();
+        const bedrooms = this.extractInt(bedroomsText);
+
+        const bathroomsText = $card.find('[data-test="full-bathrooms-value"], span.properties__bathrooms').text().trim();
+        const bathrooms = this.extractInt(bathroomsText);
+
+        const areaText = $card.find('[data-test="area-value"], span.properties__area').text().trim();
+        const squareMeters = this.extractNumber(areaText);
+
+        const parkingText = $card.find('[data-test="principal-amenity-value"], span.properties__amenity__car_park').text().trim();
+        const parking = parkingText.toLowerCase().includes('cochera') ? 1 : this.extractInt(parkingText);
+
+        // Extract location - "Santiago de Surco, Lima Centro, Lima, Lima"
+        const locationText = $card.find('[data-test="snippet__location"], div.location').text().trim();
+        const locationParts = locationText.split(',').map(s => s.trim());
+        const neighborhood = locationParts[0] || undefined;
+        const city = locationParts.length >= 3 ? locationParts[2] : (params.city || 'Lima');
+
+        // Extract image
+        const imageUrl = $card.find('.snippet__image img, .swiper-slide img').first().attr('src') || undefined;
+
+        // Transaction type from params or URL
+        const transactionType = params.transactionType ||
+          (canonicalUrl.includes('alquiler') ? 'RENT' as const : 'BUY' as const);
+
+        // Create fingerprint
+        const addressParts = [city, neighborhood, title].filter(Boolean);
+        const normalizedAddr = normalizeAddress(addressParts.join(' '));
+        const fingerprintHash = this.createFingerprint(
+          normalizedAddr, priceData.price, squareMeters, bedrooms
+        );
+
+        listings.push({
+          sourceName: this.sourceName,
+          canonicalUrl,
+          title,
+          price: priceData.price,
+          currency: priceData.currency,
+          transactionType,
+          city,
+          neighborhood,
+          squareMeters,
+          bedrooms,
+          bathrooms,
+          parking,
+          imageUrl,
+          scrapedAt: new Date(),
+          fingerprintHash,
+        });
+      } catch (error) {
+        // Skip this card on error, continue with others
+      }
+    });
+
+    return listings;
+  }
+
+  // Keep parseListing for detail page fallback (not used by scrapeAll)
   protected parseListing(
     $: cheerio.CheerioAPI,
     url: string
   ): NormalizedListing | null {
-    const { listingPage } = this.selectors;
-
-    // Extract title
-    const title = this.extractText($, listingPage.title);
+    const title = this.extractText($, 'h1.title, a.title, [data-test="snippet__title"]');
     if (!title) {
       console.log(`[${this.sourceName}] MISSING_TITLE: ${url}`);
       return null;
     }
 
-    // Extract price
-    const priceText = this.extractText($, listingPage.price);
+    const priceText = this.extractText($, '[data-test="snippet__price"], div.price, .price');
     const priceData = parsePrice(priceText);
     if (!priceData) {
       console.log(`[${this.sourceName}] MISSING_PRICE: ${url}`);
       return null;
     }
 
-    // Determine transaction type
-    const transactionType = url.includes('alquiler') ||
-      $('body').text().toLowerCase().includes('alquiler')
-      ? 'RENT' as const
-      : 'BUY' as const;
-
-    // Extract optional fields
-    const squareMetersText = this.extractText($, listingPage.squareMeters || '');
-    const squareMeters = this.extractNumber(squareMetersText);
-
-    const bedroomsText = this.extractText($, listingPage.bedrooms || '');
-    const bedrooms = this.extractInt(bedroomsText);
-
-    const bathroomsText = this.extractText($, listingPage.bathrooms || '');
-    const bathrooms = this.extractInt(bathroomsText);
-
-    const parkingText = this.extractText($, listingPage.parking || '');
-    const parking = this.extractInt(parkingText);
-
-    const neighborhood = this.extractText($, listingPage.neighborhood || '') || undefined;
-
-    const imageUrl = $(listingPage.imageUrl || '').first().attr('src') || undefined;
-
+    const transactionType = url.includes('alquiler') ? 'RENT' as const : 'BUY' as const;
     const city = this.extractCity(url);
-
-    // Create fingerprint
-    const addressParts = [city, neighborhood, title].filter(Boolean);
+    const addressParts = [city, title].filter(Boolean);
     const normalizedAddr = normalizeAddress(addressParts.join(' '));
-
-    const fingerprintHash = this.createFingerprint(
-      normalizedAddr,
-      priceData.price,
-      squareMeters,
-      bedrooms
-    );
+    const fingerprintHash = this.createFingerprint(normalizedAddr, priceData.price, undefined, undefined);
 
     return {
       sourceName: this.sourceName,
@@ -124,12 +217,6 @@ export class ProperatiScraper extends BaseScraper {
       currency: priceData.currency,
       transactionType,
       city,
-      neighborhood,
-      squareMeters,
-      bedrooms,
-      bathrooms,
-      parking,
-      imageUrl,
       scrapedAt: new Date(),
       fingerprintHash,
     };

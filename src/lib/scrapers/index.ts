@@ -31,6 +31,7 @@ export function getEnabledScrapers(): BaseScraper[] {
 
 /**
  * Run a single scraper and return results.
+ * Uses scrapeAll() which extracts data directly from search pages.
  */
 export async function runScraper(
   source: SourceName,
@@ -38,34 +39,18 @@ export async function runScraper(
 ): Promise<ScraperResult> {
   const scraper = getScraper(source);
   const startTime = Date.now();
-  const listings: NormalizedListing[] = [];
 
   try {
     console.log(`[${source}] STARTING_SCRAPE`);
 
-    // Fetch search results (listing URLs)
-    const urls = await scraper.fetchSearchResults(params);
-    console.log(`[${source}] FOUND_URLS: ${urls.length}`);
+    // Use scrapeAll - each scraper handles its own search-page extraction
+    const allListings = await scraper.scrapeAll(params);
 
-    // Fetch details for each listing
-    for (const url of urls) {
-      try {
-        const listing = await scraper.fetchListingDetails(url);
-        if (listing) {
-          // Apply keyword filters
-          if (matchesKeywords(listing, params)) {
-            listings.push(listing);
-          }
-        }
-        await randomDelay();
-      } catch (error) {
-        console.log(`[${source}] LISTING_ERROR: ${url} - ${error}`);
-        // Continue with other listings
-      }
-    }
+    // Apply keyword and filter matching
+    const listings = allListings.filter((listing) => matchesKeywords(listing, params));
 
     const duration = Date.now() - startTime;
-    console.log(`[${source}] COMPLETED: ${listings.length} listings in ${duration}ms`);
+    console.log(`[${source}] COMPLETED: ${listings.length} listings (${allListings.length} pre-filter) in ${duration}ms`);
 
     return {
       source,
@@ -112,9 +97,41 @@ export async function runAllScrapers(
 }
 
 /**
+ * Run specific scrapers (for on-demand usage).
+ */
+export async function runSelectedScrapers(
+  sources: SourceName[],
+  params: AlertParams
+): Promise<ScraperResult[]> {
+  const results: ScraperResult[] = [];
+
+  for (const source of sources) {
+    if (!scraperRegistry[source]) {
+      results.push({
+        source,
+        success: false,
+        listings: [],
+        error: `Unknown source: ${source}`,
+        duration: 0,
+      });
+      continue;
+    }
+
+    const result = await runScraper(source, params);
+    results.push(result);
+
+    if (sources.indexOf(source) < sources.length - 1) {
+      await randomDelay();
+    }
+  }
+
+  return results;
+}
+
+/**
  * Check if a listing matches keyword filters.
  */
-function matchesKeywords(
+export function matchesKeywords(
   listing: NormalizedListing,
   params: AlertParams
 ): boolean {

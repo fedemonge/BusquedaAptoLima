@@ -1,19 +1,18 @@
 {
   "searchResults": {
-    "listingCard": ".listing-card, .property-card, .search-result-item, [data-qa='listing']",
-    "listingUrl": "a[href*='/detalle/'], a[href*='/propiedad/'], a.property-link",
-    "nextPage": ".pagination-next, a[rel='next'], [aria-label='Next page']"
+    "listingCard": "article.snippet",
+    "listingUrl": "a.title, [data-test=\"snippet__title\"]",
+    "nextPage": "#pagination-next[data-islast=\"false\"]"
   },
   "listingPage": {
-    "title": "h1.title, h1.property-title, [data-qa='title']",
-    "price": ".price, [data-qa='price'], .property-price",
-    "currency": ".currency, [data-qa='currency']",
-    "squareMeters": ".area, [data-qa='surface'], .property-surface, [class*='m2']",
-    "bedrooms": ".bedrooms, [data-qa='bedrooms'], .rooms, [class*='dormitorio']",
-    "bathrooms": ".bathrooms, [data-qa='bathrooms'], [class*='baño']",
-    "parking": ".parking, [data-qa='parking'], .garages, [class*='cochera']",
-    "neighborhood": ".location, [data-qa='location'], .address, .neighborhood",
-    "imageUrl": ".gallery img, .carousel img, [data-qa='image'] img"
+    "title": "a.title, h1.title, [data-test=\"snippet__title\"]",
+    "price": "[data-test=\"snippet__price\"], div.price",
+    "squareMeters": "[data-test=\"area-value\"], span.properties__area",
+    "bedrooms": "[data-test=\"bedrooms-value\"], span.properties__bedrooms",
+    "bathrooms": "[data-test=\"full-bathrooms-value\"], span.properties__bathrooms",
+    "parking": "[data-test=\"principal-amenity-value\"], span.properties__amenity__car_park",
+    "neighborhood": "[data-test=\"snippet__location\"], div.location",
+    "imageUrl": ".snippet__image img, .swiper-slide img"
   },
   "urlPatterns": {
     "searchBase": "/s",
