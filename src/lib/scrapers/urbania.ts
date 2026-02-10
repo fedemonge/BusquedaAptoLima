@@ -25,25 +25,10 @@ export class UrbaniaScraper extends BaseScraper {
 
     let url = `${this.baseUrl}/buscar/${slug}`;
 
-    const queryParams: string[] = [];
-    if (params.maxPrice) {
-      queryParams.push(`precioMaximo=${params.maxPrice}`);
-    }
-    if (params.minSquareMeters) {
-      queryParams.push(`areaMinima=${params.minSquareMeters}`);
-    }
-    if (params.maxSquareMeters) {
-      queryParams.push(`areaMaxima=${params.maxSquareMeters}`);
-    }
-    if (params.minBedrooms) {
-      queryParams.push(`habitaciones=${params.minBedrooms}`);
-    }
+    // Urbania filter query params cause redirects and potential Cloudflare blocks.
+    // Price/sqm/bedroom filters are applied client-side by matchesKeywords.
     if (page > 1) {
-      queryParams.push(`pagina=${page}`);
-    }
-
-    if (queryParams.length > 0) {
-      url += `?${queryParams.join('&')}`;
+      url += `?pagina=${page}`;
     }
 
     return url;

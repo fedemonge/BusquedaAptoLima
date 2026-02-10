@@ -32,26 +32,11 @@ export class ProperatiScraper extends BaseScraper {
       url += `/${page}`;
     }
 
-    // Query parameters for filters
-    const queryParams: string[] = [];
-    if (params.maxPrice) {
-      queryParams.push(`price_to=${params.maxPrice}`);
-    }
-    if (params.minSquareMeters) {
-      queryParams.push(`surface_from=${params.minSquareMeters}`);
-    }
-    if (params.maxSquareMeters) {
-      queryParams.push(`surface_to=${params.maxSquareMeters}`);
-    }
-    if (params.minBedrooms) {
-      queryParams.push(`bedrooms=${params.minBedrooms}`);
-    }
+    // Properati only supports `l2` query param for neighborhood filtering.
+    // Other filter params (price_to, surface_from, bedrooms) cause HTTP 410.
+    // Price/sqm/bedroom filters are applied client-side by matchesKeywords.
     if (params.neighborhood) {
-      queryParams.push(`l2=${encodeURIComponent(params.neighborhood)}`);
-    }
-
-    if (queryParams.length > 0) {
-      url += `?${queryParams.join('&')}`;
+      url += `?l2=${encodeURIComponent(params.neighborhood)}`;
     }
 
     return url;
