@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { execSync } from 'child_process';
 import type { AlertParams, NormalizedListing, SourceName } from '@/types';
 import { SCRAPER_CONFIG, USER_AGENTS } from '@/lib/config/constants';
 import { generateFingerprint } from '@/lib/utils/fingerprint';
@@ -28,6 +29,9 @@ export abstract class BaseScraper {
   abstract readonly baseUrl: string;
   abstract readonly selectors: SelectorConfig;
 
+  // Track if this domain needs curl (set after first successful curl fallback)
+  private useCurlDirect = false;
+
   protected getRandomUserAgent(): string {
     return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
   }
@@ -37,6 +41,15 @@ export abstract class BaseScraper {
     retries = SCRAPER_CONFIG.MAX_RETRIES,
     extraHeaders?: Record<string, string>
   ): Promise<string | null> {
+    // If we already know this domain needs curl, skip fetch retries
+    if (this.useCurlDirect) {
+      const curlHtml = this.fetchWithCurl(url);
+      if (curlHtml && !this.isBotChallenge(curlHtml)) {
+        return curlHtml;
+      }
+      return null;
+    }
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const controller = new AbortController();
@@ -95,7 +108,36 @@ export abstract class BaseScraper {
       }
     }
 
+    // If all fetch attempts failed, try curl as fallback (different TLS fingerprint)
+    console.log(`[${this.sourceName}] FETCH_FALLBACK: Trying curl for ${url}`);
+    const curlHtml = this.fetchWithCurl(url);
+    if (curlHtml && !this.isBotChallenge(curlHtml)) {
+      this.useCurlDirect = true; // Skip fetch retries for subsequent requests to this domain
+      return curlHtml;
+    }
+
     return null;
+  }
+
+  /**
+   * Fallback fetch using curl (different TLS fingerprint bypasses Cloudflare).
+   */
+  protected fetchWithCurl(url: string): string | null {
+    try {
+      const ua = this.getRandomUserAgent();
+      const html = execSync(
+        `curl -sL --max-time 30 -H "User-Agent: ${ua}" -H "Accept: text/html,application/xhtml+xml" -H "Accept-Language: es-PE,es;q=0.9" "${url}"`,
+        { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 35000 }
+      );
+      if (html && html.length > 1000) {
+        console.log(`[${this.sourceName}] CURL_SUCCESS: ${url} (${html.length} bytes)`);
+        return html;
+      }
+      return null;
+    } catch (error) {
+      console.log(`[${this.sourceName}] CURL_FAILED: ${url}`);
+      return null;
+    }
   }
 
   // Detect Cloudflare or other bot challenges

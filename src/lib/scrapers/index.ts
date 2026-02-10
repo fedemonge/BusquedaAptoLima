@@ -128,8 +128,11 @@ export async function runSelectedScrapers(
   return results;
 }
 
+// USD to PEN conversion rate for price filtering
+const USD_TO_PEN = 3.35;
+
 /**
- * Check if a listing matches keyword filters.
+ * Check if a listing matches all alert filters.
  */
 export function matchesKeywords(
   listing: NormalizedListing,
@@ -140,6 +143,23 @@ export function matchesKeywords(
     listing.neighborhood,
     listing.city,
   ].filter(Boolean).join(' ').toLowerCase();
+
+  // Check neighborhood filter - listing must be in one of the requested neighborhoods
+  if (params.neighborhood) {
+    const requestedNeighborhoods = params.neighborhood
+      .split(',')
+      .map(n => n.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (requestedNeighborhoods.length > 0) {
+      const listingNeighborhood = (listing.neighborhood || '').toLowerCase();
+      const listingTitle = (listing.title || '').toLowerCase();
+      const matchesNeighborhood = requestedNeighborhoods.some(
+        (n) => listingNeighborhood.includes(n) || listingTitle.includes(n)
+      );
+      if (!matchesNeighborhood) return false;
+    }
+  }
 
   // Check include keywords (at least one must match if specified)
   if (params.keywordsInclude && params.keywordsInclude.length > 0) {
@@ -157,9 +177,12 @@ export function matchesKeywords(
     if (hasExclude) return false;
   }
 
-  // Check price filter
-  if (params.maxPrice && listing.price > params.maxPrice) {
-    return false;
+  // Check price filter - normalize to PEN for comparison
+  if (params.maxPrice) {
+    const priceInPen = listing.currency === 'USD'
+      ? listing.price * USD_TO_PEN
+      : listing.price;
+    if (priceInPen > params.maxPrice) return false;
   }
 
   // Check square meters
