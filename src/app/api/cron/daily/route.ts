@@ -140,7 +140,7 @@ async function processAlert(alert: {
 
   console.log(`[CRON] Alert ${alert.id}: Found ${allListings.length} total listings`);
 
-  // Deduplicate and find new listings
+  // Deduplicate and find new listings (with resolved DB IDs for reliable recording)
   const { newListings, allDeduped } = await deduplicateListings(
     alert.id,
     allListings
@@ -153,8 +153,16 @@ async function processAlert(alert: {
     const newUrls = new Set(newListings.map((l) => l.canonicalUrl));
     const emailedUrls = new Set(newListings.map((l) => l.canonicalUrl)); // Will email all new
     await logListingsToSheet(alert.id, alert.email, allDeduped, newUrls, emailedUrls);
+    console.log(`[CRON] Alert ${alert.id}: Sheets logging succeeded`);
   } catch (error) {
-    console.error(`[CRON] Alert ${alert.id}: Sheets logging failed:`, error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[CRON] Alert ${alert.id}: Sheets logging failed: ${errMsg}`);
+    // Check for common issues
+    if (errMsg.includes('GOOGLE_SHEETS_CREDENTIALS')) {
+      console.error('[CRON] HINT: Set GOOGLE_SHEETS_CREDENTIALS env var on Vercel');
+    } else if (errMsg.includes('GOOGLE_SHEET_ID')) {
+      console.error('[CRON] HINT: Set GOOGLE_SHEET_ID env var on Vercel');
+    }
   }
 
   // Generate unsubscribe URL
@@ -208,11 +216,16 @@ async function processAlert(alert: {
   });
 }
 
+// Listing with its resolved DB ID (set during deduplication)
+interface ResolvedListing extends NormalizedListing {
+  resolvedListingId: string;
+}
+
 async function deduplicateListings(
   alertId: string,
   listings: NormalizedListing[]
-): Promise<{ newListings: NormalizedListing[]; allDeduped: NormalizedListing[] }> {
-  const newListings: NormalizedListing[] = [];
+): Promise<{ newListings: ResolvedListing[]; allDeduped: NormalizedListing[] }> {
+  const newListings: ResolvedListing[] = [];
   const allDeduped: NormalizedListing[] = [];
   const seenUrls = new Set<string>();
   const seenFingerprints = new Set<string>();
@@ -277,7 +290,7 @@ async function deduplicateListings(
     });
 
     if (!alreadyEmailed) {
-      newListings.push(listing);
+      newListings.push({ ...listing, resolvedListingId: listingId });
     }
   }
 
@@ -286,21 +299,28 @@ async function deduplicateListings(
 
 async function recordEmailedListings(
   alertId: string,
-  listings: NormalizedListing[]
+  listings: ResolvedListing[]
 ): Promise<void> {
   for (const listing of listings) {
-    // Find the listing ID
-    const dbListing = await prisma.listing.findUnique({
-      where: { canonicalUrl: listing.canonicalUrl },
-    });
-
-    if (dbListing) {
-      await prisma.alertListing.create({
-        data: {
-          alertId,
-          listingId: dbListing.id,
+    try {
+      // Use resolvedListingId from dedup (no re-lookup needed)
+      // Use upsert to handle race conditions gracefully
+      await prisma.alertListing.upsert({
+        where: {
+          alertId_listingId: {
+            alertId,
+            listingId: listing.resolvedListingId,
+          },
         },
+        create: {
+          alertId,
+          listingId: listing.resolvedListingId,
+        },
+        update: {}, // no-op if already exists
       });
+    } catch (error) {
+      console.error(`[CRON] Failed to record emailed listing ${listing.canonicalUrl}:`, error);
+      // Continue with other listings - don't let one failure crash the entire recording
     }
   }
 }
