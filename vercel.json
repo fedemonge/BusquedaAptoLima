@@ -6,5 +6,18 @@
       "path": "/api/cron/daily",
       "schedule": "0 12 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/:path(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "fedemongeconsulting.com"
+        }
+      ],
+      "destination": "https://www.fedemongeconsulting.com/:path",
+      "permanent": true
+    }
   ]
 }
