@@ -35,11 +35,19 @@ export async function POST(request: NextRequest) {
 
   try {
     // Ensure Google Sheets is ready
+    let sheetsReady = false;
     try {
       await ensureSheetExists();
+      sheetsReady = true;
+      console.log('[CRON] Google Sheets ready');
     } catch (error) {
-      console.error('[CRON] Failed to setup Google Sheets:', error);
-      // Continue without sheets logging
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[CRON] Failed to setup Google Sheets:', errMsg);
+      if (errMsg.includes('GOOGLE_SHEETS_CREDENTIALS')) {
+        console.error('[CRON] HINT: Set GOOGLE_SHEETS_CREDENTIALS env var (base64 service account JSON)');
+      } else if (errMsg.includes('GOOGLE_SHEET_ID')) {
+        console.error('[CRON] HINT: Set GOOGLE_SHEET_ID env var');
+      }
     }
 
     // Get alerts - either specific one or all active
@@ -59,14 +67,20 @@ export async function POST(request: NextRequest) {
     const results = {
       alertsProcessed: 0,
       emailsSent: 0,
+      sheetsLogged: 0,
+      sheetsFailed: 0,
+      sheetsReady,
       errors: [] as string[],
     };
 
     // Process each alert
     for (const alert of alerts) {
       try {
-        await processAlert(alert, sendEmail);
+        const alertResult = await processAlert(alert, sendEmail, sheetsReady);
         results.alertsProcessed++;
+        if (alertResult.sheetsLogged) results.sheetsLogged++;
+        if (alertResult.sheetsFailed) results.sheetsFailed++;
+        if (alertResult.emailSent) results.emailsSent++;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error(`[CRON] Alert ${alert.id} failed:`, errorMsg);
@@ -91,6 +105,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
+interface AlertResult {
+  sheetsLogged: boolean;
+  sheetsFailed: boolean;
+  emailSent: boolean;
+}
+
 async function processAlert(alert: {
   id: string;
   email: string;
@@ -106,7 +126,7 @@ async function processAlert(alert: {
   keywordsInclude: string[];
   keywordsExclude: string[];
   sendNoResults: boolean;
-}, shouldSendEmail = true): Promise<void> {
+}, shouldSendEmail = true, sheetsReady = true): Promise<AlertResult> {
   console.log(`[CRON] Processing alert ${alert.id}`);
 
   // Build alert params
@@ -149,20 +169,23 @@ async function processAlert(alert: {
   console.log(`[CRON] Alert ${alert.id}: ${newListings.length} new listings`);
 
   // Log to Google Sheets
-  try {
-    const newUrls = new Set(newListings.map((l) => l.canonicalUrl));
-    const emailedUrls = new Set(newListings.map((l) => l.canonicalUrl)); // Will email all new
-    await logListingsToSheet(alert.id, alert.email, allDeduped, newUrls, emailedUrls);
-    console.log(`[CRON] Alert ${alert.id}: Sheets logging succeeded`);
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[CRON] Alert ${alert.id}: Sheets logging failed: ${errMsg}`);
-    // Check for common issues
-    if (errMsg.includes('GOOGLE_SHEETS_CREDENTIALS')) {
-      console.error('[CRON] HINT: Set GOOGLE_SHEETS_CREDENTIALS env var on Vercel');
-    } else if (errMsg.includes('GOOGLE_SHEET_ID')) {
-      console.error('[CRON] HINT: Set GOOGLE_SHEET_ID env var on Vercel');
+  const result: AlertResult = { sheetsLogged: false, sheetsFailed: false, emailSent: false };
+
+  if (sheetsReady && allDeduped.length > 0) {
+    try {
+      const newUrls = new Set(newListings.map((l) => l.canonicalUrl));
+      const emailedUrls = new Set(newListings.map((l) => l.canonicalUrl)); // Will email all new
+      await logListingsToSheet(alert.id, alert.email, allDeduped, newUrls, emailedUrls);
+      result.sheetsLogged = true;
+      console.log(`[CRON] Alert ${alert.id}: Logged ${allDeduped.length} listings to Sheets`);
+    } catch (error) {
+      result.sheetsFailed = true;
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[CRON] Alert ${alert.id}: Sheets logging failed: ${errMsg}`);
     }
+  } else if (!sheetsReady) {
+    result.sheetsFailed = true;
+    console.warn(`[CRON] Alert ${alert.id}: Skipping Sheets logging (setup failed earlier)`);
   }
 
   // Generate unsubscribe URL
@@ -189,6 +212,7 @@ async function processAlert(alert: {
         sourcesSearched: successfulSources.length > 0 ? successfulSources : ENABLED_SOURCES,
         unsubscribeUrl,
       });
+      result.emailSent = true;
 
       // Record emailed listings
       await recordEmailedListings(alert.id, newListings);
@@ -200,6 +224,7 @@ async function processAlert(alert: {
         sourcesSearched: successfulSources.length > 0 ? successfulSources : ENABLED_SOURCES,
         unsubscribeUrl,
       });
+      result.emailSent = true;
     }
   } else {
     console.log(`[CRON] Alert ${alert.id}: Email sending disabled for this run (${newListings.length} new listings found)`);
@@ -214,6 +239,8 @@ async function processAlert(alert: {
     where: { id: alert.id },
     data: { lastRunAt: new Date() },
   });
+
+  return result;
 }
 
 // Listing with its resolved DB ID (set during deduplication)

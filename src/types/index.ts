@@ -59,6 +59,25 @@ export const CreateAlertSchema = z.object({
 
 export type CreateAlertInput = z.infer<typeof CreateAlertSchema>;
 
+// Schema for updating an existing alert (email cannot change, all fields optional)
+export const UpdateAlertSchema = z.object({
+  alertId: z.string().min(1),
+  transactionType: z.enum(['RENT', 'BUY']).optional(),
+  city: z.enum(['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Piura', 'Cusco', 'Iquitos', 'Huancayo', 'Tacna', 'Pucallpa']).optional(),
+  neighborhood: z.string().max(100).nullable().optional(),
+  maxPrice: z.number().positive().nullable().optional(),
+  minSquareMeters: z.number().positive().nullable().optional(),
+  maxSquareMeters: z.number().positive().nullable().optional(),
+  minBedrooms: z.number().int().min(0).nullable().optional(),
+  minParking: z.number().int().min(0).nullable().optional(),
+  propertyTypes: z.array(z.string().max(50)).max(6).optional(),
+  keywordsInclude: z.array(z.string().max(100)).max(20).optional(),
+  keywordsExclude: z.array(z.string().max(100)).max(20).optional(),
+  sendNoResults: z.boolean().optional(),
+});
+
+export type UpdateAlertInput = z.infer<typeof UpdateAlertSchema>;
+
 // Scraper result
 export interface ScraperResult {
   source: SourceName;
